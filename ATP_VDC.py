@@ -153,7 +153,7 @@ df_4G_all[columns_to_convert] = df_4G_all[columns_to_convert].astype(float)
 sql_query = text(f"SELECT * FROM \"{'VDC_TNZ_4G_PHDB'}\"")
 df_4G_band = pd.read_sql(sql_query, conn)
 # df_4G_band["Primary_Key"] = df_4G_band["Element1"].astype(str) + df_4G_band["Element2"].astype(str)
-df_4G_all = pd.merge(df_4G_all, df_4G_band[["LNCEL NAME", "BAND"]], how="left", left_on="Element3", right_on="LNCEL NAME")
+df_4G_all = pd.merge(df_4G_all, df_4G_band[["LNCEL NAME", "BAND", "SECTOR ID"]], how="left", left_on="Element3", right_on="LNCEL NAME")
 df_4G_all.drop(columns=["LNCEL NAME"], inplace=True)
 ###------------------------closing connection-----------------
 conn.close()
@@ -691,7 +691,7 @@ for on_air in activity_date:
     if df_last_7_4G.empty:
         pre_value = "Threshold_based"
         print(pre_value)
-        avg4G_last_7 = df_next_7_4G[["Primary_Key", "Element1", "Element2", "Element3", "BAND"]]
+        avg4G_last_7 = df_next_7_4G[["Primary_Key", "Element1", "Element2", "Element3", "BAND", "SECTOR ID"]]
         avg4G_last_7["Date"] = "avg4G_last_7"
         for key, value in thresholds_4G.items():
             avg4G_last_7[key] = value[0]
@@ -700,27 +700,27 @@ for on_air in activity_date:
         # avg2G_last_7.to_csv(r"C:\Vodacom_TNZ\Pre&Post\\avg2G_last_7.csv", index=False)
     else:
         avg4G_last_7 = df_last_7_4G.groupby(
-            ["Primary_Key", "Element1", "Element2", "Element3", "BAND"]).mean().reset_index()
+            ["Primary_Key", "Element1", "Element2", "Element3", "BAND", "SECTOR ID"]).mean().reset_index()
         avg4G_last_7["Date"] = "avg4G_last_7"
     avg4G_next_7 = df_next_7_4G.groupby(
-        ["Primary_Key", "Element1", "Element2", "Element3", "BAND"]).mean().reset_index()
+        ["Primary_Key", "Element1", "Element2", "Element3", "BAND", "SECTOR ID"]).mean().reset_index()
     avg4G_next_7["Date"] = "avg4G_next_7"
     avg4G = pd.concat([avg4G_last_7, avg4G_next_7], ignore_index=True)
     df_last_3_avg_4G = df_last_3_4G.groupby(
-        ["Primary_Key", "Element1", "Element2", "Element3", "BAND"]).mean().reset_index()
+        ["Primary_Key", "Element1", "Element2", "Element3", "BAND", "SECTOR ID"]).mean().reset_index()
 
     ###----------making difference between last7 and next7(Post - Pre)-------------------------------------------------
     # Merge the DataFrames on the grouping columns
     diff_avg4G = pd.merge(
         avg4G_last_7,
         avg4G_next_7,
-        on=["Primary_Key", "Element1", "Element2", "Element3", "BAND"],
+        on=["Primary_Key", "Element1", "Element2", "Element3", "BAND", "SECTOR ID"],
         suffixes=('_last_7', '_next_7')
     )
     diff_avg4G = pd.merge(diff_avg4G, df_last_3_avg_4G, on="Primary_Key",
                           how="left")
 
-    columns_to_remove = ["Date", "Primary_Key", "Element1", "Element2", "Element3", "Date_last_7", "Date_next_7", "BAND"]
+    columns_to_remove = ["Date", "Primary_Key", "Element1", "Element2", "Element3", "Date_last_7", "Date_next_7", "BAND", "SECTOR ID"]
     # List of columns to format
     columns_to_diff = [col for col in diff_avg4G.columns if col not in columns_to_remove]
     # print(columns_to_diff)
@@ -853,7 +853,7 @@ for on_air in activity_date:
 
             diff_col_list.append(status)
 
-    diff_avg4G = diff_avg4G[["Primary_Key", "Element1_y", "Element2_y", "Element3_y", "BAND_y"] + diff_col_list]
+    diff_avg4G = diff_avg4G[["Primary_Key", "Element1_y", "Element2_y", "Element3_y", "BAND_y", "SECTOR ID_y"] + diff_col_list]
     # Drop nom&dnom columns from the diff_avg4G
     try:
         exclude_columns = list(nom_dnm_mapping.values())
@@ -890,39 +890,104 @@ for on_air in activity_date:
 #######--------------2G--------------------------------
 df_filtered_2G = pd.concat(df_filtered_2G_list, axis=0)
 avg2G = pd.concat(avg2G_list, axis=0)
+avg2G["Date"] = avg2G["Date"].replace("avg2G_last_7", "Pre").replace("avg2G_next_7", "Post")
 diff_avg2G = pd.concat(diff_avg2G_list, axis=0)
 df_next_7_2G = pd.concat(df_next_2G_7_color_list, axis=0)
 # summary_df = pd.concat(summary_df_2G_list, axis=0)
 #######---------------3G----------------------------------
 df_filtered_3G = pd.concat(df_filtered_3G_list, axis=0)
 avg3G = pd.concat(avg3G_list, axis=0)
+avg3G["Date"] = avg3G["Date"].replace("avg3G_last_7", "Pre").replace("avg3G_next_7", "Post")
 diff_avg3G = pd.concat(diff_avg3G_list, axis=0)
 df_next_7_3G = pd.concat(df_next_3G_7_color_list, axis=0)
 ######-----------4G----------------------------------
 df_filtered_4G = pd.concat(df_filtered_4G_list, axis=0)
 avg4G = pd.concat(avg4G_list, axis=0)
+avg4G["Date"] = avg4G["Date"].replace("avg4G_last_7", "Pre").replace("avg4G_next_7", "Post")
 diff_avg4G = pd.concat(diff_avg4G_list, axis=0)
 df_next_7_4G = pd.concat(df_next_4G_7_color_list, axis=0)
-###---making trends for prb, payload, thrpt, cqi
-pre_avg = avg4G[avg4G["Date"].isin(["avg4G_last_7"])]
-pivot_pre = avg4G.pivot(index="Element3", columns=["Date", "BAND"], values=["AVERAGE CQI", "DL_USER_THRPTFL18", "PDCP SDU VOLUME, DL", "PDCP SDU VOLUME, UL", "PERC DL PRB UTIL"])
-# pivot_pre = pivot_pre.reset_index()
-# Combine 'Date' and 'BAND' into a single column name
-pivot_pre.columns = [f"{date}_{band}_{value}" for value, date, band in pivot_pre.columns]
-pivot_pre.to_csv(r"C:\Vodacom_TNZ\Pre&Post\\pivot_pre.csv")
-sys.exit()
-pivot_pre.columns = [f"pre_{col[0]}_{col[1]}" for col in pivot_pre.columns]
-# pivot_pre.to_csv(r"C:\Vodacom_TNZ\Pre&Post\\pivot_pre.csv")
-post_avg = avg4G[avg4G["Date"].isin(["avg4G_next_7"])]
-pivot_post = post_avg.pivot(index="Element3", columns="BAND", values=["AVERAGE CQI", "DL_USER_THRPTFL18", "PDCP SDU VOLUME, DL", "PDCP SDU VOLUME, UL", "PERC DL PRB UTIL"])
-pivot_post = pivot_post.reset_index()
-pivot_post.columns = [f"post_{col[0]}_{col[1]}" for col in pivot_post.columns]
-# pivot_post.to_csv(r"C:\Vodacom_TNZ\Pre&Post\\pivot_post.csv")
-pre_post = pd.merge(pivot_pre, pivot_post, how="left", left_on="pre_Element3_", right_on="post_Element3_")
-pre_post.drop(columns=["post_Element3_"], inplace=True)
-pre_post.rename(columns={"pre_Element3_": "Element3"}, inplace=True)
-# pre_post.to_csv(r"C:\Vodacom_TNZ\Pre&Post\\pre_post.csv")
-# sys.exit()
+###---making trends for prb, payload, thrpt, cqi-------------------------
+# avg4G.to_csv(r"C:\Vodacom_TNZ\Pre&Post\\avg4G.csv")
+filter_avg4G = avg4G.dropna(subset=["SECTOR ID"])
+bands = filter_avg4G["BAND"].unique()
+filter_avg4G["SECTOR ID"] =filter_avg4G["SECTOR ID"].astype(int)
+filter_avg4G["Site_ID_&_Sector"] = filter_avg4G["Element2"].astype(str) + "_" + filter_avg4G["SECTOR ID"].astype(str)
+# pivot_table = filter_avg4G.pivot_table(index='Site_ID_&_Sector', columns='BAND', values='Element3')
+filter_avg4G_pre = filter_avg4G[filter_avg4G["Date"].isin(["Pre"])]
+filter_avg4G_post = filter_avg4G[filter_avg4G["Date"].isin(["Post"])]
+pivot_table_pre = filter_avg4G_pre.pivot_table(index="Site_ID_&_Sector", columns="BAND", values="Element3",
+                             aggfunc=lambda x: ','.join(x)).fillna('')
+pivot_table_post = filter_avg4G_post.pivot_table(index="Site_ID_&_Sector", columns="BAND", values="Element3",
+                             aggfunc=lambda x: ','.join(x)).fillna('')
+pivot_table_pre = pivot_table_pre.reset_index()
+pivot_table_post = pivot_table_post.reset_index()
+for i in bands:
+    # Merge on the column specified by i
+    pivot_update_pre = pivot_table_pre.merge(filter_avg4G_pre[["Element3", "AVERAGE CQI", "DL_USER_THRPTFL18", "PDCP SDU VOLUME, DL", "PDCP SDU VOLUME, UL", "PERC DL PRB UTIL"]], left_on=i, right_on="Element3", how="left")
+    # # Rename the merged column
+    pivot_update_pre = pivot_update_pre.rename(columns={"AVERAGE CQI": f"Pre:AVERAGE CQI:{i}","DL_USER_THRPTFL18": f"Pre:DL_USER_THRPTFL18:{i}",
+                            "PDCP SDU VOLUME, DL": f"Pre:PDCP SDU VOLUME, DL:{i}", "PDCP SDU VOLUME, UL": f"Pre:PDCP SDU VOLUME, UL:{i}",
+                   "PERC DL PRB UTIL": f"Pre:PERC DL PRB UTIL:{i}"})
+    pivot_update_pre = pivot_update_pre.drop(columns=["Element3"])
+    # Drop the 'Element3' column as it's no longer needed
+    pivot_update_post = pivot_table_post.merge(filter_avg4G_post[
+                                             ["Element3", "AVERAGE CQI", "DL_USER_THRPTFL18", "PDCP SDU VOLUME, DL",
+                                              "PDCP SDU VOLUME, UL", "PERC DL PRB UTIL"]], left_on=i,
+                                         right_on="Element3", how="left")
+    pivot_update_post = pivot_update_post.rename(
+        columns={"AVERAGE CQI": f"Post:AVERAGE CQI:{i}", "DL_USER_THRPTFL18": f"Post:DL_USER_THRPTFL18:{i}",
+                 "PDCP SDU VOLUME, DL": f"Post:PDCP SDU VOLUME, DL:{i}",
+                 "PDCP SDU VOLUME, UL": f"Post:PDCP SDU VOLUME, UL:{i}",
+                 "PERC DL PRB UTIL": f"Post:PERC DL PRB UTIL:{i}"})
+    pivot_update_post = pivot_update_post.drop(columns=["Element3"])
+    # Update output_df to the new DataFrame
+    pivot_table_pre = pivot_update_pre
+    pivot_table_post = pivot_update_post
+# Combine the specified headers into a new column
+pivot_table_pre["Key"] = pivot_table_pre[bands].astype(str).agg('_'.join, axis=1)
+pivot_table_post["Key"] = pivot_table_post[bands].astype(str).agg('_'.join, axis=1)
+pivot_table_post.drop(columns=bands, inplace=True)
+pivot_update_post.drop(columns="Site_ID_&_Sector", inplace=True)
+combine_df = pivot_update_pre.merge(pivot_update_post, how="left", on="Key")
+combine_df.drop(columns=["Key"], inplace=True)
+# Loop through each band
+for band in bands:
+    # Extract "Pre" and "Post" headers for the band
+    pre_headers = [col for col in combine_df.columns if col.startswith("Pre") and band in col]
+    post_headers = [col.replace("Pre", "Post") for col in pre_headers]
+
+    # Calculate percentage difference for each metric in the band
+    for pre_col, post_col in zip(pre_headers, post_headers):
+        metric_name = f"Delta:{pre_col.split(':')[1]}:{band}"
+        combine_df[metric_name] = ((combine_df[post_col] - combine_df[pre_col]) / combine_df[pre_col]) * 100
+    # Calculate share for each Post column
+    for post_col in post_headers:
+        share_name = f"%Share:{post_col.split(':')[1]}:{band}"
+        combine_df[share_name] = (combine_df[post_col] / combine_df[post_headers].sum(axis=1)) * 100
+# combine_df.to_csv(r"C:\Vodacom_TNZ\Pre&Post\\combine_df.csv", index=False)
+# Reorder columns: Group by metric (e.g., A, B, C) and arrange Pre, Post, Diff
+metrics = set(col.split(':')[1] for col in combine_df.columns if "Pre" in col)
+# print(metrics)
+ordered_columns = []
+ordered_columns.append("Site_ID_&_Sector")
+for i in bands:
+    ordered_columns.append(i)
+for metric in sorted(metrics):  # Order A, B, C...
+    for band in bands:
+        pre_col = f"Pre:{metric}:{band}"
+        post_col = f"Post:{metric}:{band}"
+        diff_col = f"Delta:{metric}:{band}"
+        share_col = f"%Share:{metric}:{band}"
+        if pre_col in combine_df.columns:
+            ordered_columns.append(pre_col)
+        if post_col in combine_df.columns:
+            ordered_columns.append(post_col)
+        if diff_col in combine_df.columns:
+            ordered_columns.append(diff_col)
+        if share_col in combine_df.columns:
+            ordered_columns.append(share_col)
+
+combine_df = combine_df[ordered_columns]
 
 
 
@@ -1038,7 +1103,7 @@ df_next_4G_7_color = df_next_7_4G.style.apply(color_cells_4G, subset=columns_to_
 
 
 ####-------------Saving Raw Data output-------------------------------------------
-with pd.ExcelWriter(out_path+"ouput.xlsx", engine='xlsxwriter') as writer:
+with pd.ExcelWriter(out_path+"output.xlsx", engine='xlsxwriter') as writer:
       # Write each DataFrame to a different sheet
       df_filtered_2G.to_excel(writer, sheet_name='2G', index=False)
       df_filtered_3G.to_excel(writer, sheet_name='3G', index=False)
@@ -1049,7 +1114,7 @@ with pd.ExcelWriter(out_path+"ouput.xlsx", engine='xlsxwriter') as writer:
       diff_avg2G.to_excel(writer, sheet_name='diff_avg2G', index=False)
       diff_avg3G.to_excel(writer, sheet_name='diff_avg3G', index=False)
       diff_avg4G.to_excel(writer, sheet_name='diff_avg4G', index=False)
-      pre_post.to_excel(writer, sheet_name='4G_additional_output', index=False)
+      combine_df.to_excel(writer, sheet_name='4G_additional_output', index=False)
       # summary_df.to_excel(writer, sheet_name='Summary_2G', index=False)
 
 ###-----------Saving Color Data output-------------------------------
